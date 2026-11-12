@@ -338,6 +338,10 @@ if [ "$FAST" = "0" ]; then
             ask_yn "📚 Link against your own libft (./libft)?" "$CFG_LIBFT"
             USE_LIB="$ANSWER"
         fi
+    else
+        echo ""
+        ask_yn "🛠️  Generate a Makefile (install, run, debug, clean, lint, lint-strict)?" "$CFG_MAKEFILE"
+        NEED_MAKEFILE="$ANSWER"
     fi
 
     # Question 5: README
@@ -374,13 +378,15 @@ else
             MK_TYPE="$DEF_TYPE"
             USE_LIB="$CFG_LIBFT"
         fi
+    else
+        NEED_MAKEFILE="$CFG_MAKEFILE"
     fi
     NEED_README="$CFG_README"
 
     if [ "$LANG_CHOICE" = "1" ]; then
         info "Settings: C, header=$NEED_HEADER, makefile=$NEED_MAKEFILE (type=$CFG_TYPE, libft=$USE_LIB), readme=$NEED_README, author=$USERS"
     else
-        info "Settings: Python, readme=$NEED_README, author=$USERS"
+        info "Settings: Python, makefile=$NEED_MAKEFILE, readme=$NEED_README, author=$USERS"
     fi
 fi
 
@@ -605,16 +611,19 @@ EOF
 else
     info "Setting up Python project structure..."
 
+    # Entry point: type hints and docstrings so it passes flake8 and mypy --strict
     if can_write main.py; then
+        info "Creating main.py..."
         cat << EOF > main.py
 #!/usr/bin/env python3
-"""
-Project: $DIR_NAME
+"""$DIR_NAME: entry point.
+
 Author(s): $USERS
 """
 
 
-def main():
+def main() -> None:
+    """Run the program."""
     print("Hello from $DIR_NAME!")
 
 
@@ -623,7 +632,99 @@ if __name__ == "__main__":
 EOF
         chmod +x main.py
     fi
-    [ -e requirements.txt ] || touch requirements.txt
+
+    # Dependencies. flake8 and mypy are the linters required by the subjects.
+    if can_write requirements.txt; then
+        info "Creating requirements.txt..."
+        cat << 'EOF' > requirements.txt
+flake8
+mypy
+EOF
+    fi
+
+    # flake8 does not skip virtual environments by default
+    if can_write .flake8; then
+        info "Creating .flake8..."
+        cat << 'EOF' > .flake8
+[flake8]
+exclude = .git, __pycache__, .mypy_cache, .venv, venv, build, dist
+EOF
+    fi
+
+    if can_write .gitignore; then
+        info "Creating .gitignore..."
+        cat << 'EOF' > .gitignore
+# Python caches
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
+EOF
+    fi
+
+    if [ "$NEED_MAKEFILE" = "y" ] && can_write Makefile; then
+        info "Creating Makefile..."
+        cat << 'EOF' > Makefile
+# Entry point and its arguments: make run ARGS="config.txt"
+MAIN        = main.py
+ARGS        =
+
+# 'make install' creates .venv; every rule uses it when it exists
+VENV        = .venv
+PY          = python3
+PYTHON      = $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,$(PY))
+
+MYPY_FLAGS  = --warn-return-any --warn-unused-ignores \
+              --ignore-missing-imports --disallow-untyped-defs \
+              --check-untyped-defs
+MYPY_EXCL   = --exclude '(^|/)(\.?venv|build|dist)/'
+
+all: run
+
+install:
+	$(PY) -m venv $(VENV)
+	$(VENV)/bin/python -m pip install --upgrade pip
+	$(VENV)/bin/python -m pip install -r requirements.txt
+
+run:
+	$(PYTHON) $(MAIN) $(ARGS)
+
+debug:
+	$(PYTHON) -m pdb $(MAIN) $(ARGS)
+
+clean:
+	find . -path ./$(VENV) -prune -o -type d \
+		\( -name __pycache__ -o -name .mypy_cache -o -name .pytest_cache \) \
+		-exec rm -rf {} +
+	find . -path ./$(VENV) -prune -o -type f -name '*.py[co]' -exec rm -f {} +
+
+fclean: clean
+	rm -rf $(VENV)
+
+lint:
+	$(PYTHON) -m flake8 .
+	$(PYTHON) -m mypy . $(MYPY_FLAGS) $(MYPY_EXCL)
+
+lint-strict:
+	$(PYTHON) -m flake8 .
+	$(PYTHON) -m mypy . --strict $(MYPY_EXCL)
+
+.PHONY: all install run debug clean fclean lint lint-strict
+EOF
+    fi
 fi
 
 # ------------------------------------------------------------------------------
@@ -640,6 +741,15 @@ if [ "$NEED_README" = "y" ] && can_write README.md; then
 <!-- FILES_START -->
 <!-- FILES_END -->
 "
+    fi
+
+    USAGE_HINT="<!-- How to compile and run it, with a short example. -->"
+    if [ "$LANG_CHOICE" = "2" ]; then
+        USAGE_HINT="<!-- Requires Python 3.10+. Show how to install and run it, e.g.:
+make install    # creates .venv and installs requirements.txt
+make run        # runs main.py
+make lint       # flake8 + mypy
+-->"
     fi
 
     cat << EOF > README.md
@@ -665,7 +775,7 @@ $FILES_SECTION
 
 ### Usage
 
-<!-- How to run it, with a short example. -->
+$USAGE_HINT
 
 ### Testing
 

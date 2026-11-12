@@ -1,8 +1,5 @@
 # Genesis
 
-> [!NOTE]
-> `Genesis.sh` only works for `C` projects at this moment, `Python` workspace coming soon!
-
 > [!IMPORTANT]
 > Genesis is an independent, community-made tool and is not affiliated with, endorsed by or sponsored by 42 or its schools.
 
@@ -22,8 +19,8 @@ Genesis is an interactive CLI assistant (*wizard*) to quickly scaffold project w
    - **Sync** `.c` files into the `Makefile` and `README.md` (`genesis sync`).
 5. **C and Python support:**
    - **C:** optional header file (`.h`) with a valid include guard, a `Makefile` for a **program** or a **static library** (built with `ar`), header dependency tracking, and optional linking against your own `libft`.
-   - **Python:** an executable `main.py` entrypoint and an empty `requirements.txt`.
-6. **Non-destructive:** files that already exist (`.h`, `Makefile`, `README.md`, `main.py`) are never overwritten; the script tells you which ones it skipped. It is safe to run on a cloned repository.
+   - **Python:** a typed `main.py` entrypoint, `requirements.txt` (`flake8`, `mypy`), `.flake8`, `.gitignore` and an optional `Makefile` with the rules required by the Python subjects (`install`, `run`, `debug`, `clean`, `lint`, `lint-strict`).
+6. **Non-destructive:** files that already exist (`.h`, `Makefile`, `README.md`, `main.py`, `requirements.txt`, `.flake8`, `.gitignore`) are never overwritten; the script tells you which ones it skipped. It is safe to run on a cloned repository.
 7. **Clean source grouping:** `.c` files are listed 5 per line with aligned continuation lines in the `Makefile` and inside a code block in the `README.md`.
 8. **Tailored documentation:** the `README.md` template covers description, architecture, usage, testing, resources and AI usage disclosure.
 9. **Safe configuration:** the file is *read*, never executed (see [Configuration file](#configuration-file)).
@@ -102,7 +99,9 @@ Each prompt shows its default in the hint: `[Y/n]` means Enter applies *Yes*, `[
    - Generate a `Makefile`? If yes:
      - What does it build? **Program** (executable) or **Static library** (`.a`, built with `ar`)
      - Link against your own `libft` (`./libft`)?
-7. **Documentation:** generate `README.md`?
+7. **Python options** *(only if Python is selected)*:
+   - Generate a `Makefile` (`install`, `run`, `debug`, `clean`, `lint`, `lint-strict`)?
+8. **Documentation:** generate `README.md`?
 
 If you cloned a repository that already contains `.c` files in its root, they are added to `SRCS` and to the README list automatically.
 
@@ -161,7 +160,7 @@ GENERATE_README=y
 | `LANGUAGE`			| `c` \ `python`							| Language of the new project.					|
 | `PROJECT_TYPE`		| `program` \ `library`						| What the C `Makefile` builds.					|
 | `GENERATE_HEADER`		| `y` \ `n`									| Generate `<name>.h` (C only).					|
-| `GENERATE_MAKEFILE`	| `y` \ `n`									| Generate a `Makefile` (C only).				|
+| `GENERATE_MAKEFILE`	| `y` \ `n`									| Generate a `Makefile` (C and Python).			|
 | `USE_LIBFT`			| `y` \ `n`									| Use the `libft` template in the `Makefile`.	|
 | `GENERATE_README`		| `y` \ `n`									| Generate `README.md`.							|
 
@@ -216,12 +215,44 @@ Libraries that need more than that, such as MiniLibX (extra system flags, its ow
 
 </details>
 
+<details>
+<summary><h3>Python workspace</h3></summary>
+
+The Python template follows the conventions shared by the Python projects of the Common Core (modules, *A-Maze-ing*, *Fly-in*, *Call Me Maybe*...): **Python 3.10+**, code clean under **`flake8`** and fully **type-hinted** so it passes **`mypy`**.
+
+| File				| Content																|
+|-------------------|-----------------------------------------------------------------------|
+| `main.py`			| Executable entry point with type hints and docstrings (passes `mypy --strict`).	|
+| `requirements.txt`| `flake8` and `mypy`. Add your own dependencies here.					|
+| `.flake8`			| Excludes `.venv`, caches and build folders from `flake8 .`.			|
+| `.gitignore`		| `__pycache__`, `*.pyc`, `.mypy_cache`, `.pytest_cache`, virtual environments, `build/`, `dist/`, `*.egg-info`. |
+| `Makefile`		| Optional, see below.													|
+
+#### Makefile rules
+
+| Rule				| What it does																|
+|-------------------|---------------------------------------------------------------------------|
+| `install`			| Creates `.venv` and installs `requirements.txt` into it.					|
+| `run`				| Runs `MAIN` (`main.py`) with `ARGS`: `make run ARGS="config.txt"`.		|
+| `debug`			| Runs `MAIN` under `pdb`.													|
+| `clean`			| Removes `__pycache__`, `.mypy_cache`, `.pytest_cache` and `*.pyc`/`*.pyo`.	|
+| `fclean`			| `clean` + removes `.venv` *(extra, not required by the subjects)*.		|
+| `lint`			| `flake8 .` and `mypy .` with `--warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs`. |
+| `lint-strict`		| `flake8 .` and `mypy . --strict`.											|
+
+Every rule uses `.venv/bin/python` when the virtual environment exists, and `python3` otherwise, so you do not need to activate it. A virtual environment avoids the `externally-managed-environment` error of `pip` on recent systems.
+
+If your subject requires a specific entry point (for example `a_maze_ing.py`), rename `main.py` and update `MAIN` in the `Makefile`. If it asks for a reusable package (`.whl` / `.tar.gz`), add a `pyproject.toml` yourself: Genesis does not generate it.
+
+</details>
+
 ---
 
 ## Limitations
 
 - Sync only scans the **project root** (no subdirectories such as `src/`).
 - Sync only handles **`.c` files**. Python projects do not use markers.
+- The mypy flags of `lint` are the ones found in the published subjects at the time of writing. Check your subject: if it lists different flags, edit `MYPY_FLAGS` in the `Makefile`.
 - Every `.c` in the root is listed, including test files such as a throwaway `main.c`. Remove them before syncing if the subject does not allow them (a static library usually must not contain a `main`).
 - Anything you write between the markers is replaced on the next sync. Keep your own notes outside of them.
 - The configuration file is always read from the folder of the script; there is no per-project configuration.
